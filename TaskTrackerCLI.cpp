@@ -147,6 +147,5 @@ int main(int argc, char *argv[])
    }
 
    it->second(taskTracker, cli);
-   ListTask(taskTracker, { "list", {} });
    return 0;
 }
