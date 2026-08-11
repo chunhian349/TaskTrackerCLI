@@ -96,21 +96,59 @@ std::string GetCleanString(std::string inString)
 	return inString.substr(startQuotePos + 1, endQuotePos - startQuotePos - 1);
 }
 
+bool WriteStringToFile(std::string filePath, const std::string& inString)
+{
+	std::ofstream outFile(filePath);
+	if (!outFile.is_open())
+		return false;
+
+	outFile << inString;
+	return true;
+}
+
 TaskTracker::TaskTracker()
 {
+	jsonFilePath = "tasks.json";
 	std::string jsonString;
-	if (!ReadFileToString("tasks.json", jsonString))
+	if (!ReadFileToString(jsonFilePath, jsonString))
 	{
-		std::cout << "Unable to read tasks.json, empty task list will be created" << std::endl;
+		std::cout << "Unable to read file " << jsonFilePath << ", an empty task list will be created." << std::endl;
 		return;
 	}
+	std::cout << "Read file " << jsonFilePath << " successfully." << std::endl;
 
+	std::string backupFilePath = jsonFilePath + ".bak";
+	if (!WriteStringToFile(backupFilePath, jsonString))
+	{
+		std::cout << "Unable to create backup file " << backupFilePath << " , program will proceed without backup file." << std::endl;
+	}
+	else
+	{
+		std::cout << "Create backup file " << backupFilePath << " successfully." << std::endl;
+	}
+	
 	ParseJsonString(jsonString);
 }
 
 TaskTracker::~TaskTracker()
 {
-	
+	std::string tmpFilePath = jsonFilePath + ".tmp";
+	std::string jsonString = Stringify();
+	if (!WriteStringToFile(tmpFilePath, jsonString))
+	{
+		std::cout << "Unable to create temporary file " << " , program failed to write modified task into file." << std::endl;
+		return;
+	}
+
+	std::remove(jsonFilePath.c_str());
+	if (std::rename(tmpFilePath.c_str(), jsonFilePath.c_str()) == 0)
+	{
+		std::cout << "Save tasks into " << jsonFilePath << " successfully." << std::endl;
+	}
+	else
+	{
+		std::cout << "Failed to rename into " << jsonFilePath << ", tasks remain saved in " << tmpFilePath << std::endl;
+	}
 }
 
 void TaskTracker::AddTask(std::string newDesc)
@@ -232,4 +270,25 @@ void TaskTracker::ParseJsonString(const std::string& jsonString)
 
 		tasks.push_back(newTask);
 	}
+}
+
+std::string TaskTracker::Stringify()
+{
+	std::string jsonString = "[\n";
+
+	for (size_t i = 0; i < tasks.size(); i++)
+	{
+		jsonString.append("\t{\n");
+		jsonString.append("\t\t\"id\": " + std::to_string(tasks[i].id) + ",\n");
+		jsonString.append("\t\t\"desc\": \"" + tasks[i].desc + "\",\n");
+		jsonString.append("\t\t\"status\": \"" + EnumToString(tasks[i].status) + "\",\n");
+		jsonString.append("\t\t\"createdAt\": \"" + TimePointToString(tasks[i].createdAt) + "\",\n");
+		jsonString.append("\t\t\"updatedAt\": \"" + TimePointToString(tasks[i].updatedAt) + "\"\n");
+
+		if (i != tasks.size() - 1) { jsonString.append("\t},\n"); }
+		else { jsonString.append("\t}\n"); }
+	}
+	
+	jsonString.append("]\n");
+	return jsonString;
 }

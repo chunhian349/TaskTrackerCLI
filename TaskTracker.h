@@ -25,7 +25,9 @@ class TaskTracker
 {
 private:
 	std::vector<TASK> tasks;
+	std::string jsonFilePath;
 	void ParseJsonString(const std::string& jsonString);
+	std::string Stringify();
 	
 public:
 	TaskTracker();
