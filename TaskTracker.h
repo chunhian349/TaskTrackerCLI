@@ -14,7 +14,7 @@ TimePoint StringToTimePoint(std::string tpString);
 
 struct TASK
 {
-	unsigned int id;
+	uint32_t id;
 	std::string desc;
 	TASK_STATUS status;
 	TimePoint createdAt;
@@ -26,6 +26,7 @@ class TaskTracker
 private:
 	std::vector<TASK> tasks;
 	std::string jsonFilePath;
+
 	void ParseJsonString(const std::string& jsonString);
 	std::string Stringify();
 	
@@ -33,8 +34,8 @@ public:
 	TaskTracker();
 	~TaskTracker();
 	void AddTask(std::string newDesc);
-	void UpdateTask(unsigned int id, std::string updatedDesc);
-	void DeleteTask(unsigned int id);
-	void MarkTask(unsigned int id, TASK_STATUS newStatus);
 	void ListTask(bool enableStatusFilter, TASK_STATUS targetStatus=TASK_STATUS::TODO);
+	void UpdateTask(uint32_t id, std::string updatedDesc);
+	void DeleteTask(uint32_t id);
+	void MarkTask(uint32_t id, TASK_STATUS newStatus);
 };

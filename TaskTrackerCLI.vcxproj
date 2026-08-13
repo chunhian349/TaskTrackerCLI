@@ -125,9 +125,11 @@
   <ItemGroup>
     <ClCompile Include="TaskTracker.cpp" />
     <ClCompile Include="TaskTrackerCLI.cpp" />
+    <ClCompile Include="Utils.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="TaskTracker.h" />
+    <ClInclude Include="Utils.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

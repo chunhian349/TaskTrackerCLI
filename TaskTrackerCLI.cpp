@@ -2,9 +2,8 @@
 //
 
 #include "TaskTracker.h"
+#include "Utils.h"
 #include <iostream>
-#include <vector>
-#include <sstream>
 #include <unordered_map>
 
 struct CLICOMMAND
@@ -13,21 +12,7 @@ struct CLICOMMAND
    std::vector<std::string> commandArgs;
 };
 
-bool ParseStringToUInt(std::string inString, unsigned int& outUInt)
-{
-   if (!inString.length())
-      return false;
-
-   size_t invalidCharPos = inString.find_first_not_of("0123456789");
-   if (invalidCharPos != std::string::npos)
-      return false;
-
-   std::stringstream ss(inString);
-   ss >> outUInt;
-   return true;
-}
-
-void AddTask(TaskTracker& taskTracker, const CLICOMMAND& cli)
+static void AddTask(TaskTracker& taskTracker, const CLICOMMAND& cli)
 {
    if (cli.commandArgs.size() < 1)
    {
@@ -38,7 +23,7 @@ void AddTask(TaskTracker& taskTracker, const CLICOMMAND& cli)
    taskTracker.AddTask(cli.commandArgs[0]);
 }
 
-void UpdateTask(TaskTracker& taskTracker, const CLICOMMAND& cli)
+static void UpdateTask(TaskTracker& taskTracker, const CLICOMMAND& cli)
 {
    if (cli.commandArgs.size() < 2)
    {
@@ -46,8 +31,8 @@ void UpdateTask(TaskTracker& taskTracker, const CLICOMMAND& cli)
       return;
    }
 
-   unsigned int id = 0;
-   if (!ParseStringToUInt(cli.commandArgs[0], id))
+   uint32_t id = 0;
+   if (!ParseStringToUInt32(cli.commandArgs[0], id))
    {
       std::cout << "Update task failed, invalid id entered" << std::endl;
       return;
@@ -56,7 +41,7 @@ void UpdateTask(TaskTracker& taskTracker, const CLICOMMAND& cli)
    taskTracker.UpdateTask(id, cli.commandArgs[1]);
 }
 
-void DeleteTask(TaskTracker& taskTracker, const CLICOMMAND& cli)
+static void DeleteTask(TaskTracker& taskTracker, const CLICOMMAND& cli)
 {
    if (cli.commandArgs.size() < 1)
    {
@@ -64,8 +49,8 @@ void DeleteTask(TaskTracker& taskTracker, const CLICOMMAND& cli)
       return;
    }
    
-   unsigned int id = 0;
-   if (!ParseStringToUInt(cli.commandArgs[0], id))
+   uint32_t id = 0;
+   if (!ParseStringToUInt32(cli.commandArgs[0], id))
    {
       std::cout << "Delete task failed, invalid id entered" << std::endl;
       return;
@@ -74,7 +59,7 @@ void DeleteTask(TaskTracker& taskTracker, const CLICOMMAND& cli)
    taskTracker.DeleteTask(id);
 }
 
-void MarkTask(TaskTracker& taskTracker, const CLICOMMAND& cli)
+static void MarkTask(TaskTracker& taskTracker, const CLICOMMAND& cli)
 {
    if (cli.commandArgs.size() < 1)
    {
@@ -82,8 +67,8 @@ void MarkTask(TaskTracker& taskTracker, const CLICOMMAND& cli)
       return;
    }
 
-   unsigned int id = 0;
-   if (!ParseStringToUInt(cli.commandArgs[0], id))
+   uint32_t id = 0;
+   if (!ParseStringToUInt32(cli.commandArgs[0], id))
    {
       std::cout << "Mark task failed, invalid id entered" << std::endl;
       return;
@@ -99,7 +84,7 @@ void MarkTask(TaskTracker& taskTracker, const CLICOMMAND& cli)
    taskTracker.MarkTask(id, newStatus);
 }
 
-void ListTask(TaskTracker& taskTracker, const CLICOMMAND& cli)
+static void ListTask(TaskTracker& taskTracker, const CLICOMMAND& cli)
 {
    if (cli.commandArgs.size() == 0)
    {
@@ -117,7 +102,7 @@ void ListTask(TaskTracker& taskTracker, const CLICOMMAND& cli)
    }
 }
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
    TaskTracker taskTracker;
    CLICOMMAND cli;

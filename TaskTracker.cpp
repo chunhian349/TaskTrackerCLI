@@ -1,8 +1,8 @@
 #include "TaskTracker.h"
+#include "Utils.h"
 #include <iostream>
 #include <sstream>
 #include <iomanip>
-#include <fstream>
 
 const struct { TASK_STATUS status; std::string name; } TASKSTATUSMAP[] = {
 	{TASK_STATUS::TODO, "todo"},
@@ -47,63 +47,6 @@ TimePoint StringToTimePoint(std::string tpString)
 
 	std::time_t ctimeTimePoint = std::mktime(&tmTimePoint);
 	return std::chrono::system_clock::from_time_t(ctimeTimePoint);
-}
-
-bool ReadFileToString(std::string filePath, std::string& outString)
-{
-	std::ifstream inFile(filePath);
-	if (!inFile.is_open())
-		return false;
-
-	outString = { std::istreambuf_iterator<char>(inFile), {} };
-	return true;
-}
-
-// Only for keys of primitive type (non-struct or non-array)
-bool GetJsonKeyValue(std::string jsonString, std::string key, std::string& valueString)
-{
-	std::string stringKey = "\"" + key + "\"";
-	size_t keyPos = jsonString.find(stringKey);
-	if (keyPos == std::string::npos)
-		return false;
-
-	size_t colonPos = jsonString.find(':', keyPos + key.size());
-	if (colonPos == std::string::npos)
-		return false;
-
-	size_t endSymbolPos = jsonString.find_first_of(",}", colonPos + 1);
-	if (endSymbolPos == std::string::npos)
-		return false;
-
-	size_t valueStringSize = endSymbolPos - colonPos - 1;
-	if (valueStringSize == 0)
-		return false;
-
-	valueString = jsonString.substr(colonPos + 1, valueStringSize);
-	return true;
-}
-
-std::string GetCleanString(std::string inString)
-{
-	size_t startQuotePos = inString.find('"');
-	if (startQuotePos == std::string::npos)
-		return inString;
-
-	size_t endQuotePos = inString.rfind('"');
-	if (endQuotePos == std::string::npos || startQuotePos == endQuotePos)
-		return inString;
-
-	return inString.substr(startQuotePos + 1, endQuotePos - startQuotePos - 1);
-}
-
-bool WriteStringToFile(std::string filePath, const std::string& inString)
-{
-	std::ofstream outFile(filePath);
-	if (!outFile.is_open())
-		return false;
-
-	outFile << inString;
-	return true;
 }
 
 TaskTracker::TaskTracker()
@@ -153,6 +96,12 @@ TaskTracker::~TaskTracker()
 
 void TaskTracker::AddTask(std::string newDesc)
 {
+	if (tasks.size() == UINT32_MAX)
+	{
+		std::cout << "Failed to add task, task size hit program max capacity." << std::endl;
+		return;
+	}
+
 	TASK newTask = { 
 		tasks.size(),
 		newDesc, 
@@ -164,7 +113,7 @@ void TaskTracker::AddTask(std::string newDesc)
 	std::cout << "Task added successfully." << std::endl;
 }
 
-void TaskTracker::UpdateTask(unsigned int id, std::string updatedDesc)
+void TaskTracker::UpdateTask(uint32_t id, std::string updatedDesc)
 {
 	if (id >= tasks.size())
 	{
@@ -177,7 +126,7 @@ void TaskTracker::UpdateTask(unsigned int id, std::string updatedDesc)
 	std::cout << "Task updated successfully." << std::endl;
 }
 
-void TaskTracker::DeleteTask(unsigned int id)
+void TaskTracker::DeleteTask(uint32_t id)
 {
 	if (id >= tasks.size())
 	{
@@ -195,7 +144,7 @@ void TaskTracker::DeleteTask(unsigned int id)
 	std::cout << "Task deleted successfully." << std::endl;
 }
 
-void TaskTracker::MarkTask(unsigned int id, TASK_STATUS newStatus)
+void TaskTracker::MarkTask(uint32_t id, TASK_STATUS newStatus)
 {
 	if (id >= tasks.size())
 	{
@@ -250,8 +199,7 @@ void TaskTracker::ParseJsonString(const std::string& jsonString)
 
 		std::string keyValueString = "";
 		if (!GetJsonKeyValue(taskString, "id", keyValueString)) { continue; }
-		std::stringstream ss(keyValueString);
-		ss >> newTask.id;
+		if (!ParseStringToUInt32(keyValueString, newTask.id)) { continue; }
 
 		if (!GetJsonKeyValue(taskString, "desc", keyValueString)) { continue; }
 		newTask.desc = GetCleanString(keyValueString);
