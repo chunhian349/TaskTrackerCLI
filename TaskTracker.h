@@ -3,39 +3,40 @@
 #include <string>
 #include <chrono>
 
-typedef std::chrono::system_clock::time_point TimePoint;
 enum TASK_STATUS { TODO, IN_PROGRESS, DONE };
-
-// Type conversion
-std::string EnumToString(TASK_STATUS taskStatus);
-bool StringToEnum(std::string inString, TASK_STATUS& outStatus);
-std::string TimePointToString(TimePoint timePoint);
-TimePoint StringToTimePoint(std::string tpString);
 
 struct TASK
 {
 	uint32_t id;
 	std::string desc;
 	TASK_STATUS status;
-	TimePoint createdAt;
-	TimePoint updatedAt;
+	std::chrono::system_clock::time_point createdAt;
+	std::chrono::system_clock::time_point updatedAt;
 };
+
+std::string EnumToString(TASK_STATUS taskStatus);
+bool StringToEnum(const std::string& inString, TASK_STATUS& outStatus);
+std::string TimePointToString(const std::chrono::system_clock::time_point& timePoint);
+std::chrono::system_clock::time_point StringToTimePoint(const std::string& tpString);
 
 class TaskTracker
 {
 private:
 	std::vector<TASK> tasks;
-	std::string jsonFilePath;
+	std::string jsonPath;
+	bool jsonLoaded;
 
+public:
+	TaskTracker(std::string readJsonPath);
+	~TaskTracker();
+	bool IsJsonLoaded() const { return jsonLoaded; }
+	bool AddTask(std::string newDesc);
+	bool UpdateTask(uint32_t id, std::string updatedDesc);
+	bool DeleteTask(uint32_t id);
+	bool MarkTask(uint32_t id, TASK_STATUS newStatus);
+	std::vector<TASK> GetTasks(TASK_STATUS* targetStatus=nullptr) const;
+
+private:
 	void ParseJsonString(const std::string& jsonString);
 	std::string Stringify();
-	
-public:
-	TaskTracker();
-	~TaskTracker();
-	void AddTask(std::string newDesc);
-	void ListTask(bool enableStatusFilter, TASK_STATUS targetStatus=TASK_STATUS::TODO);
-	void UpdateTask(uint32_t id, std::string updatedDesc);
-	void DeleteTask(uint32_t id);
-	void MarkTask(uint32_t id, TASK_STATUS newStatus);
 };

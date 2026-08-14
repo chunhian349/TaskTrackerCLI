@@ -15,7 +15,7 @@ std::string EnumToString(TASK_STATUS taskStatus)
 	return TASKSTATUSMAP[taskStatus].name;
 }
 
-bool StringToEnum(std::string inString, TASK_STATUS& outStatus)
+bool StringToEnum(const std::string& inString, TASK_STATUS& outStatus)
 {
 	for (auto taskStatusMap : TASKSTATUSMAP)
 	{
@@ -28,7 +28,7 @@ bool StringToEnum(std::string inString, TASK_STATUS& outStatus)
 	return false;
 }
 
-std::string TimePointToString(TimePoint timePoint)
+std::string TimePointToString(const std::chrono::system_clock::time_point& timePoint)
 {
 	std::time_t ctimeTimePoint = std::chrono::system_clock::to_time_t(timePoint);
 	std::tm tmTimePoint = { 0 };
@@ -39,7 +39,7 @@ std::string TimePointToString(TimePoint timePoint)
 	return ss.str();
 }
 
-TimePoint StringToTimePoint(std::string tpString)
+std::chrono::system_clock::time_point StringToTimePoint(const std::string& tpString)
 {
 	std::stringstream ss(tpString);
 	std::tm tmTimePoint = { 0 };
@@ -49,58 +49,43 @@ TimePoint StringToTimePoint(std::string tpString)
 	return std::chrono::system_clock::from_time_t(ctimeTimePoint);
 }
 
-TaskTracker::TaskTracker()
+TaskTracker::TaskTracker(std::string readJsonPath)
+	: jsonPath(readJsonPath)
 {
-	jsonFilePath = "tasks.json";
 	std::string jsonString;
-	if (!ReadFileToString(jsonFilePath, jsonString))
+	if (!ReadFileToString(jsonPath, jsonString))
 	{
-		std::cout << "Unable to read file " << jsonFilePath << ", an empty task list will be created." << std::endl;
+		jsonLoaded = false;
 		return;
 	}
-	std::cout << "Read file " << jsonFilePath << " successfully." << std::endl;
 
-	std::string backupFilePath = jsonFilePath + ".bak";
-	if (!WriteStringToFile(backupFilePath, jsonString))
-	{
-		std::cout << "Unable to create backup file " << backupFilePath << " , program will proceed without backup file." << std::endl;
-	}
-	else
-	{
-		std::cout << "Create backup file " << backupFilePath << " successfully." << std::endl;
-	}
+	std::string backupFilePath = jsonPath + ".bak";
+	WriteStringToFile(backupFilePath, jsonString);
 	
 	ParseJsonString(jsonString);
-}
+	jsonLoaded = true;
+} 
 
 TaskTracker::~TaskTracker()
 {
-	std::string tmpFilePath = jsonFilePath + ".tmp";
+	std::string tmpFilePath = jsonPath + ".tmp";
 	std::string jsonString = Stringify();
 	if (!WriteStringToFile(tmpFilePath, jsonString))
 	{
-		std::cout << "Unable to create temporary file " << " , program failed to write modified task into file." << std::endl;
+		std::cerr << "Unable to create temporary file " << tmpFilePath << ", program failed to write modified task into file.\n";
 		return;
 	}
 
-	std::remove(jsonFilePath.c_str());
-	if (std::rename(tmpFilePath.c_str(), jsonFilePath.c_str()) == 0)
+	std::remove(jsonPath.c_str());
+	if (std::rename(tmpFilePath.c_str(), jsonPath.c_str()) != 0)
 	{
-		std::cout << "Save tasks into " << jsonFilePath << " successfully." << std::endl;
-	}
-	else
-	{
-		std::cout << "Failed to rename into " << jsonFilePath << ", tasks remain saved in " << tmpFilePath << std::endl;
+		std::cerr << "Failed to rename into " << jsonPath << ", tasks remain saved in " << tmpFilePath << ".\n";
 	}
 }
 
-void TaskTracker::AddTask(std::string newDesc)
+bool TaskTracker::AddTask(std::string newDesc)
 {
-	if (tasks.size() == UINT32_MAX)
-	{
-		std::cout << "Failed to add task, task size hit program max capacity." << std::endl;
-		return;
-	}
+	if (tasks.size() == UINT32_MAX) { return false; }
 
 	TASK newTask = { 
 		tasks.size(),
@@ -110,75 +95,51 @@ void TaskTracker::AddTask(std::string newDesc)
 		std::chrono::system_clock::now() 
 	};
 	tasks.push_back(newTask);
-	std::cout << "Task added successfully." << std::endl;
+	return true;
 }
 
-void TaskTracker::UpdateTask(uint32_t id, std::string updatedDesc)
+bool TaskTracker::UpdateTask(uint32_t id, std::string updatedDesc)
 {
-	if (id >= tasks.size())
-	{
-		std::cout << "Update task failed, invalid id entered" << std::endl;
-		return;
-	}
+	if (id >= tasks.size()) { return false; }
 
 	tasks.at(id).desc = updatedDesc;
 	tasks.at(id).updatedAt = std::chrono::system_clock::now();
-	std::cout << "Task updated successfully." << std::endl;
+	return true;
 }
 
-void TaskTracker::DeleteTask(uint32_t id)
+bool TaskTracker::DeleteTask(uint32_t id)
 {
-	if (id >= tasks.size())
-	{
-		std::cout << "Delete task failed, invalid task id entered." << std::endl;
-		return;
-	}
+	if (id >= tasks.size()) { return false; }
 
 	for (int i = id + 1; i < tasks.size(); i++)
 	{
 		tasks.at(i - 1) = tasks.at(i);
 		tasks.at(i - 1).id = i - 1;
 	}
-	
 	tasks.pop_back();
-	std::cout << "Task deleted successfully." << std::endl;
+	return true;
 }
 
-void TaskTracker::MarkTask(uint32_t id, TASK_STATUS newStatus)
+bool TaskTracker::MarkTask(uint32_t id, TASK_STATUS newStatus)
 {
-	if (id >= tasks.size())
-	{
-		std::cout << "Mark task failed, invalid task id entered." << std::endl;
-		return;
-	}
+	if (id >= tasks.size()) { return false; }
 
 	tasks.at(id).status = newStatus;
 	tasks.at(id).updatedAt = std::chrono::system_clock::now();
-	std::cout << "Task marked successfully." << std::endl;
+	return true;
 }
 
-void TaskTracker::ListTask(bool enableStatusFilter, TASK_STATUS targetStatus)
+std::vector<TASK> TaskTracker::GetTasks(TASK_STATUS* targetStatus) const
 {
-	if (tasks.empty())
-		std::cout << "Task list is empty." << std::endl;
+	if (!targetStatus) { return tasks; }
 
-	std::cout << "=========================Task list=========================" << std::endl;
+	std::vector<TASK> targetStatusTasks;
 	for (TASK task : tasks)
 	{
-		if (enableStatusFilter && task.status != targetStatus)
-			continue;
-
-		std::string strDateCreatedAt = TimePointToString(task.createdAt);
-		std::string strDateUpdatedAt = TimePointToString(task.updatedAt);
-
-		std::cout << "Task id #" << task.id << std::endl;
-		std::cout << "Description: " << task.desc << std::endl;
-		std::cout << "Status: " << EnumToString(task.status) << std::endl;
-		std::cout << "Created at: " << strDateCreatedAt << std::endl;
-		std::cout << "Updated at: " << strDateUpdatedAt << std::endl;
-		std::cout << std::endl;
+		if (task.status == *targetStatus)
+			targetStatusTasks.push_back(task);
 	}
-	std::cout << "===========================================================" << std::endl;
+	return targetStatusTasks;
 }
 
 void TaskTracker::ParseJsonString(const std::string& jsonString)
@@ -223,7 +184,6 @@ void TaskTracker::ParseJsonString(const std::string& jsonString)
 std::string TaskTracker::Stringify()
 {
 	std::string jsonString = "[\n";
-
 	for (size_t i = 0; i < tasks.size(); i++)
 	{
 		jsonString.append("\t{\n");
@@ -236,7 +196,6 @@ std::string TaskTracker::Stringify()
 		if (i != tasks.size() - 1) { jsonString.append("\t},\n"); }
 		else { jsonString.append("\t}\n"); }
 	}
-	
 	jsonString.append("]\n");
 	return jsonString;
 }
