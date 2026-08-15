@@ -1,5 +1,6 @@
 #pragma once
-#include <vector>
+#include <unordered_map>
+#include <queue>
 #include <string>
 #include <chrono>
 
@@ -7,9 +8,8 @@ enum TASK_STATUS { TODO, IN_PROGRESS, DONE };
 
 struct TASK
 {
-	uint32_t id;
 	std::string desc;
-	TASK_STATUS status;
+	TASK_STATUS status=TASK_STATUS::TODO;
 	std::chrono::system_clock::time_point createdAt;
 	std::chrono::system_clock::time_point updatedAt;
 };
@@ -22,9 +22,10 @@ std::chrono::system_clock::time_point StringToTimePoint(const std::string& tpStr
 class TaskTracker
 {
 private:
-	std::vector<TASK> tasks;
 	std::string jsonPath;
 	bool jsonLoaded;
+	std::unordered_map<uint32_t, TASK> tasks;
+	std::queue<uint32_t> deletedId;
 
 public:
 	TaskTracker(std::string readJsonPath);
@@ -34,7 +35,7 @@ public:
 	bool UpdateTask(uint32_t id, std::string updatedDesc);
 	bool DeleteTask(uint32_t id);
 	bool MarkTask(uint32_t id, TASK_STATUS newStatus);
-	std::vector<TASK> GetTasks(TASK_STATUS* targetStatus=nullptr) const;
+	std::unordered_map<uint32_t, TASK> GetTasks(TASK_STATUS* targetStatus=nullptr) const;
 
 private:
 	void ParseJsonString(const std::string& jsonString);

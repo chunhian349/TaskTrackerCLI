@@ -110,12 +110,19 @@ static void MarkTask(TaskTracker& taskTracker, const CLICOMMAND& cli)
       return;
    }
 
-   taskTracker.MarkTask(id, newStatus);
+   if (taskTracker.MarkTask(id, newStatus))
+   {
+      std::cout << "Mark task successfully.\n";
+   }
+   else
+   {
+      std::cout << "Mark task failed, invalid task id entered.\n";
+   }
 }
 
 static void ListTask(TaskTracker& taskTracker, const CLICOMMAND& cli)
 {
-   std::vector<TASK> tasks;
+   std::unordered_map<uint32_t, TASK> tasks;
    if (cli.commandArgs.size() == 0)
    {
       tasks = taskTracker.GetTasks();
@@ -132,17 +139,20 @@ static void ListTask(TaskTracker& taskTracker, const CLICOMMAND& cli)
    }
 
    if (tasks.empty())
+   {
       std::cout << "Task list is empty.\n";
+      return;
+   }
       
    std::cout << "=========================Task list=========================\n\n";
-   for (TASK task : tasks)
+   for (auto itr = tasks.begin(); itr != tasks.end(); itr++)
    {
-      std::string strDateCreatedAt = TimePointToString(task.createdAt);
-      std::string strDateUpdatedAt = TimePointToString(task.updatedAt);
+      std::string strDateCreatedAt = TimePointToString(itr->second.createdAt);
+      std::string strDateUpdatedAt = TimePointToString(itr->second.updatedAt);
       
-      std::cout << "Task id #" << task.id << "\n";
-      std::cout << "Description: " << task.desc << "\n";
-      std::cout << "Status: " << EnumToString(task.status) << "\n";
+      std::cout << "Task id: " << itr->first << "\n";
+      std::cout << "Description: " << itr->second.desc << "\n";
+      std::cout << "Status: " << EnumToString(itr->second.status) << "\n";
       std::cout << "Created at: " << strDateCreatedAt << "\n";
       std::cout << "Updated at: " << strDateUpdatedAt << "\n";
       std::cout << "\n";

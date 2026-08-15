@@ -64,7 +64,7 @@ TaskTracker::TaskTracker(std::string readJsonPath)
 	
 	ParseJsonString(jsonString);
 	jsonLoaded = true;
-} 
+}
 
 TaskTracker::~TaskTracker()
 {
@@ -85,23 +85,35 @@ TaskTracker::~TaskTracker()
 
 bool TaskTracker::AddTask(std::string newDesc)
 {
-	if (tasks.size() == UINT32_MAX) { return false; }
+	uint32_t newId = 0;
+	if (tasks.size() < UINT32_MAX)
+	{
+		newId = static_cast<uint32_t>(tasks.size());
+	}
+	else if (tasks.size() >= UINT32_MAX && !deletedId.empty())
+	{
+		newId = deletedId.front();
+		deletedId.pop();
+	}
+	else
+	{
+		return false;
+	}
 
 	TASK newTask = { 
-		tasks.size(),
 		newDesc, 
 		TASK_STATUS::TODO, 
 		std::chrono::system_clock::now(), 
 		std::chrono::system_clock::now() 
 	};
-	tasks.push_back(newTask);
+	tasks[newId] = newTask;
 	return true;
 }
 
 bool TaskTracker::UpdateTask(uint32_t id, std::string updatedDesc)
 {
-	if (id >= tasks.size()) { return false; }
-
+	if (tasks.find(id) == tasks.end()) { return false; }
+	
 	tasks.at(id).desc = updatedDesc;
 	tasks.at(id).updatedAt = std::chrono::system_clock::now();
 	return true;
@@ -109,35 +121,31 @@ bool TaskTracker::UpdateTask(uint32_t id, std::string updatedDesc)
 
 bool TaskTracker::DeleteTask(uint32_t id)
 {
-	if (id >= tasks.size()) { return false; }
+	if (tasks.find(id) == tasks.end()) { return false; }
 
-	for (int i = id + 1; i < tasks.size(); i++)
-	{
-		tasks.at(i - 1) = tasks.at(i);
-		tasks.at(i - 1).id = i - 1;
-	}
-	tasks.pop_back();
+	tasks.erase(id);
+	deletedId.push(id);
 	return true;
 }
 
 bool TaskTracker::MarkTask(uint32_t id, TASK_STATUS newStatus)
 {
-	if (id >= tasks.size()) { return false; }
+	if (tasks.find(id) == tasks.end()) { return false; }
 
 	tasks.at(id).status = newStatus;
 	tasks.at(id).updatedAt = std::chrono::system_clock::now();
 	return true;
 }
 
-std::vector<TASK> TaskTracker::GetTasks(TASK_STATUS* targetStatus) const
+std::unordered_map<uint32_t, TASK> TaskTracker::GetTasks(TASK_STATUS* targetStatus) const
 {
 	if (!targetStatus) { return tasks; }
 
-	std::vector<TASK> targetStatusTasks;
-	for (TASK task : tasks)
+	std::unordered_map<uint32_t, TASK> targetStatusTasks;
+	for (auto itr = tasks.begin(); itr != tasks.end(); itr++)
 	{
-		if (task.status == *targetStatus)
-			targetStatusTasks.push_back(task);
+		if (itr->second.status == *targetStatus)
+			targetStatusTasks[itr->first] = itr->second;
 	}
 	return targetStatusTasks;
 }
@@ -147,6 +155,8 @@ void TaskTracker::ParseJsonString(const std::string& jsonString)
 	size_t searchOffset = 0;
 	while (true)
 	{
+		if (tasks.size() >= UINT32_MAX) { break; }
+
 		size_t taskStartPos = jsonString.find('{', searchOffset);
 		if (taskStartPos == std::string::npos) { break; }
 
@@ -155,13 +165,10 @@ void TaskTracker::ParseJsonString(const std::string& jsonString)
 
 		searchOffset = taskEndPos + 1;
 
-		TASK newTask = { 0 };
+		TASK newTask = {};
 		std::string taskString = jsonString.substr(taskStartPos, taskEndPos - taskStartPos + 1);
 
 		std::string keyValueString = "";
-		if (!GetJsonKeyValue(taskString, "id", keyValueString)) { continue; }
-		if (!ParseStringToUInt32(keyValueString, newTask.id)) { continue; }
-
 		if (!GetJsonKeyValue(taskString, "desc", keyValueString)) { continue; }
 		newTask.desc = GetCleanString(keyValueString);
 
@@ -176,24 +183,25 @@ void TaskTracker::ParseJsonString(const std::string& jsonString)
 		if (!GetJsonKeyValue(taskString, "updatedAt", keyValueString)) { continue; }
 		keyValueString = GetCleanString(keyValueString);
 		newTask.updatedAt = StringToTimePoint(keyValueString);
-
-		tasks.push_back(newTask);
+		
+		tasks[static_cast<uint32_t>(tasks.size())] = newTask;
 	}
 }
 
 std::string TaskTracker::Stringify()
 {
+	uint32_t idx = 0;
 	std::string jsonString = "[\n";
-	for (size_t i = 0; i < tasks.size(); i++)
+	for (auto itr = tasks.begin(); itr != tasks.end();)
 	{
 		jsonString.append("\t{\n");
-		jsonString.append("\t\t\"id\": " + std::to_string(tasks[i].id) + ",\n");
-		jsonString.append("\t\t\"desc\": \"" + tasks[i].desc + "\",\n");
-		jsonString.append("\t\t\"status\": \"" + EnumToString(tasks[i].status) + "\",\n");
-		jsonString.append("\t\t\"createdAt\": \"" + TimePointToString(tasks[i].createdAt) + "\",\n");
-		jsonString.append("\t\t\"updatedAt\": \"" + TimePointToString(tasks[i].updatedAt) + "\"\n");
+		jsonString.append("\t\t\"id\": " + std::to_string(idx++) + ",\n");
+		jsonString.append("\t\t\"desc\": \"" + itr->second.desc + "\",\n");
+		jsonString.append("\t\t\"status\": \"" + EnumToString(itr->second.status) + "\",\n");
+		jsonString.append("\t\t\"createdAt\": \"" + TimePointToString(itr->second.createdAt) + "\",\n");
+		jsonString.append("\t\t\"updatedAt\": \"" + TimePointToString(itr->second.updatedAt) + "\"\n");
 
-		if (i != tasks.size() - 1) { jsonString.append("\t},\n"); }
+		if (++itr != tasks.end()) { jsonString.append("\t},\n"); }
 		else { jsonString.append("\t}\n"); }
 	}
 	jsonString.append("]\n");
