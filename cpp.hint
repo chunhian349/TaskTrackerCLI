@@ -1,0 +1,15 @@
+// Google Test macros:
+
+#define TEST(test_suite_name, test_name)
+#define TEST_F(test_fixture_name, test_name)
+
+#define ASSERT_TRUE(condition)
+#define ASSERT_FALSE(condition)
+#define ASSERT_EQ(val1, val2)
+#define ASSERT_NE(val1, val2)
+
+#define EXPECT_TRUE(condition)
+#define EXPECT_FALSE(condition)
+#define EXPECT_EQ(val1, val2)
+#define EXPECT_NE(val1, val2)
+#define EXPECT_LT(val1, val2)

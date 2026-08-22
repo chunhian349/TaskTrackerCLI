@@ -1,0 +1,4 @@
+# Remove code analysis warning clutter for external libraries
+# gtest header source files explicitly by name pattern
+[**gtest**.h]
+generated_code = true

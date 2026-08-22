@@ -19,3 +19,31 @@ set(SOURCES
 
 # 5. Define the final executable name and its source files
 add_executable(${PROJECT_NAME} ${SOURCES})
+
+# --- GOOGLETEST INTEGRATION ---
+enable_testing()
+
+# 1. Download GoogleTest safely from GitHub
+include(FetchContent)
+FetchContent_Declare(
+  googletest
+  GIT_REPOSITORY https://github.com/google/googletest.git
+  GIT_TAG        v1.15.2  # Uses a stable, fixed release version
+)
+# For Windows compatibility, prevent gtest from overriding compiler flag settings
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(googletest)
+
+# 2. Define your test runner executable
+add_executable(TestTaskTracker 
+    tests/TestTaskTracker.cpp
+	src/Utils.cpp
+	src/TaskTracker.cpp
+)
+
+# 3. Link GoogleTest to your test runner
+target_link_libraries(TestTaskTracker GTest::gtest_main)
+
+# 4. Let CMake find and organize all your individual gtest macros automatically
+include(GoogleTest)
+gtest_discover_tests(TestTaskTracker)
