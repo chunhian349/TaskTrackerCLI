@@ -17,7 +17,7 @@ std::string EnumToString(TASK_STATUS taskStatus)
 
 bool StringToEnum(const std::string& inString, TASK_STATUS& outStatus)
 {
-	for (auto taskStatusMap : TASKSTATUSMAP)
+	for (const auto& taskStatusMap : TASKSTATUSMAP)
 	{
 		if (inString == taskStatusMap.name)
 		{
@@ -49,6 +49,16 @@ std::chrono::system_clock::time_point StringToTimePoint(const std::string& tpStr
 	return std::chrono::system_clock::from_time_t(ctimeTimePoint);
 }
 
+TaskTracker::TaskTracker(const std::vector<TASK>& inTasks)
+	: jsonPath("")
+	, jsonLoaded(false)
+{
+	for (size_t idx = 0; idx < inTasks.size(); idx++)
+	{
+		tasks[idx] = inTasks[idx];
+	}
+}
+
 TaskTracker::TaskTracker(std::string readJsonPath)
 	: jsonPath(readJsonPath)
 {
@@ -68,6 +78,8 @@ TaskTracker::TaskTracker(std::string readJsonPath)
 
 TaskTracker::~TaskTracker()
 {
+	if (!jsonLoaded) { return; }
+
 	std::string tmpFilePath = jsonPath + ".tmp";
 	std::string jsonString = Stringify();
 	if (!WriteStringToFile(tmpFilePath, jsonString))

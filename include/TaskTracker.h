@@ -28,6 +28,7 @@ private:
 	std::queue<uint32_t> deletedId;
 
 public:
+	TaskTracker(const std::vector<TASK>& inTasks={});
 	TaskTracker(std::string readJsonPath);
 	~TaskTracker();
 	bool IsJsonLoaded() const { return jsonLoaded; }
