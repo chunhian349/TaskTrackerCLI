@@ -3,39 +3,137 @@
 #include "../include/TaskTracker.h"
 #include <fstream>
 
-TEST(AddTask, AddTasks)
+static void IsTaskListEqual(const std::unordered_map<uint32_t, TASK>& taskList1, const std::unordered_map<uint32_t, TASK>& taskList2)
+{
+	ASSERT_EQ(taskList1.size(), taskList2.size());
+	
+	for (auto itr = taskList1.begin(); itr != taskList1.end(); itr++)
+	{
+		ASSERT_NE(taskList2.find(itr->first), taskList2.end());
+		EXPECT_EQ(itr->second.desc, taskList2.at(itr->first).desc);
+		EXPECT_EQ(itr->second.status, taskList2.at(itr->first).status);
+		auto tpDiff = std::chrono::duration_cast<std::chrono::milliseconds>(itr->second.createdAt - taskList2.at(itr->first).createdAt);
+		long long timeDiff = std::abs(tpDiff.count());
+		EXPECT_LT(timeDiff, 100);	
+		tpDiff = std::chrono::duration_cast<std::chrono::milliseconds>(itr->second.createdAt - taskList2.at(itr->first).createdAt);
+		timeDiff = std::abs(tpDiff.count());
+		EXPECT_LT(timeDiff, 100);
+	}
+}
+
+class TestWithSampleTasks : public ::testing::Test
+{
+protected:
+	std::unordered_map<uint32_t, TASK> sampleTasks = {
+		{0, {"NewTask1", TASK_STATUS::TODO, std::chrono::system_clock::now(), std::chrono::system_clock::now()}},
+		{1, {"NewTask2", TASK_STATUS::TODO, std::chrono::system_clock::now(), std::chrono::system_clock::now()}},
+		{2, {"NewTask3", TASK_STATUS::TODO, std::chrono::system_clock::now(), std::chrono::system_clock::now()}},
+	};
+
+	void TestMarkTasks(TASK_STATUS targetStatus)
+	{
+		sampleTasks[0].status = TASK_STATUS::IN_PROGRESS;
+		sampleTasks[1].status = TASK_STATUS::DONE;
+		sampleTasks[2].status = TASK_STATUS::TODO;
+
+		TaskTracker taskTracker({ sampleTasks[0], sampleTasks[1], sampleTasks[2] });
+		ASSERT_FALSE(taskTracker.IsJsonLoaded());
+		std::unordered_map<uint32_t, TASK> tasksBeforeMark = taskTracker.GetTasks();
+		ASSERT_EQ(tasksBeforeMark.size(), sampleTasks.size());
+
+		for (uint32_t id = 0; id < tasksBeforeMark.size(); id++)
+		{
+			sampleTasks[id].status = targetStatus;
+			ASSERT_TRUE(taskTracker.MarkTask(id, targetStatus));
+			sampleTasks[id].updatedAt = std::chrono::system_clock::now();
+		}
+
+		std::unordered_map<uint32_t, TASK> tasksAfterMark = taskTracker.GetTasks();
+		IsTaskListEqual(tasksAfterMark, sampleTasks);
+	}
+
+	void TestGetTasksByStatus(TASK_STATUS targetStatus)
+	{
+		sampleTasks[0].status = TASK_STATUS::DONE;
+		sampleTasks[1].status = TASK_STATUS::TODO;
+		sampleTasks[2].status = TASK_STATUS::IN_PROGRESS;
+
+		TaskTracker taskTracker({ sampleTasks[0], sampleTasks[1], sampleTasks[2] });
+		ASSERT_FALSE(taskTracker.IsJsonLoaded());
+		ASSERT_EQ(taskTracker.GetTasks().size(), sampleTasks.size());
+
+		std::unordered_map<uint32_t, TASK> tasksByTargetStatus = taskTracker.GetTasks(&targetStatus);
+		ASSERT_EQ(tasksByTargetStatus.size(), 1);
+		uint32_t targetTaskId = tasksByTargetStatus.begin()->first;
+		ASSERT_NE(sampleTasks.find(targetTaskId), sampleTasks.end());
+		IsTaskListEqual(tasksByTargetStatus, {{targetTaskId, sampleTasks[targetTaskId]}});
+	}
+};
+
+class TestWithJsonFile : public ::testing::Test
+{
+protected:
+	std::string jsonFile = "testsample.json";
+
+	void SetUp() override
+	{
+		std::remove(jsonFile.c_str());;
+	}
+	
+	void TearDown() override
+	{
+		std::remove(jsonFile.c_str());
+	}
+
+	void CreateEmptyFile()
+	{
+		TaskTracker taskTracker(jsonFile);
+		ASSERT_TRUE(taskTracker.GetTasks().empty());
+	}
+
+	void CreateSampleFile(std::unordered_map<uint32_t, TASK>& outSampleTasks)
+	{
+		TaskTracker taskTracker(jsonFile);
+		ASSERT_TRUE(taskTracker.GetTasks().empty());
+
+		std::vector<std::string> samplesTaskDesc = { "ReadTask1", "ReadTask2", "ReadTask3" };
+		for (const std::string& taskDesc : samplesTaskDesc)
+		{
+			ASSERT_TRUE(taskTracker.AddTask(taskDesc));
+		}
+
+		outSampleTasks = taskTracker.GetTasks();
+		ASSERT_EQ(outSampleTasks.size(), samplesTaskDesc.size());
+		
+		for (auto itr = outSampleTasks.begin(); itr != outSampleTasks.end(); itr++)
+		{
+			itr->second.createdAt = StringToTimePoint(TimePointToString(itr->second.createdAt));
+			itr->second.updatedAt = StringToTimePoint(TimePointToString(itr->second.updatedAt));
+		}
+	}
+};
+
+TEST_F(TestWithSampleTasks, AddTasks_FromEmptyTaskList)
 {
 	TaskTracker taskTracker;
 	ASSERT_FALSE(taskTracker.IsJsonLoaded());
 	std::unordered_map<uint32_t, TASK> emptyTasks = taskTracker.GetTasks();
 	ASSERT_TRUE(emptyTasks.empty());
 
-	std::vector<std::string> tasksDescToAdd = { "NewTask1", "NewTask2", "NewTask3" };
-	std::vector<std::chrono::system_clock::time_point> tasksAddTime;
-	for (const std::string& taskDesc : tasksDescToAdd)
+	for (uint32_t id = 0; id < TestWithSampleTasks::sampleTasks.size(); id++)
 	{
-		ASSERT_TRUE(taskTracker.AddTask(taskDesc));
-		tasksAddTime.push_back(std::chrono::system_clock::now());
+		ASSERT_TRUE(taskTracker.AddTask(sampleTasks[id].desc));
+		std::chrono::system_clock::time_point estimateAddTime = std::chrono::system_clock::now();
+		sampleTasks[id].createdAt = estimateAddTime;
+		sampleTasks[id].updatedAt = estimateAddTime;
 	}
 
 	std::unordered_map<uint32_t, TASK> tasksAfterAdd = taskTracker.GetTasks();
-	ASSERT_EQ(tasksAfterAdd.size(), tasksDescToAdd.size());
-
-	for (uint32_t id=0; id< tasksAfterAdd.size(); id++)
-	{
-		ASSERT_NE(tasksAfterAdd.find(id), tasksAfterAdd.end());
-		EXPECT_EQ(tasksAfterAdd[id].desc, tasksDescToAdd[id]);
-		EXPECT_EQ(tasksAfterAdd[id].status, TASK_STATUS::TODO);
-		auto tpDiff = std::chrono::duration_cast<std::chrono::milliseconds>(tasksAddTime[id] - tasksAfterAdd[id].createdAt);
-		long long timeDiff = std::abs(tpDiff.count());
-		EXPECT_LT(timeDiff, 100);
-		tpDiff = std::chrono::duration_cast<std::chrono::milliseconds>(tasksAddTime[id] - tasksAfterAdd[id].updatedAt);
-		timeDiff = std::abs(tpDiff.count());
-		EXPECT_LT(timeDiff, 100);
-	}
+	SCOPED_TRACE("AddTasks_FromEmptyTaskList");
+	IsTaskListEqual(tasksAfterAdd, sampleTasks);
 }
 
-TEST(UpdateTask, FromEmptyTask)
+TEST_F(TestWithSampleTasks, UpdateTask_FromEmptyTaskList)
 {
 	TaskTracker taskTrackerEmpty;
 	ASSERT_TRUE(taskTrackerEmpty.GetTasks().empty());
@@ -43,288 +141,112 @@ TEST(UpdateTask, FromEmptyTask)
 	EXPECT_TRUE(taskTrackerEmpty.GetTasks().empty());
 }
 
-TEST(UpdateTask, UsingValidIds)
+TEST_F(TestWithSampleTasks, UpdateTask_UsingValidIds)
 {
-	std::vector<TASK> sampleTasks = { 
-		{ "NewTask1", TASK_STATUS::TODO, std::chrono::system_clock::now(), std::chrono::system_clock::now() },
-		{ "NewTask2", TASK_STATUS::TODO, std::chrono::system_clock::now(), std::chrono::system_clock::now() },
-		{ "NewTask3", TASK_STATUS::TODO, std::chrono::system_clock::now(), std::chrono::system_clock::now() },
-	};
-	TaskTracker taskTracker(sampleTasks);
+	TaskTracker taskTracker({ sampleTasks[0], sampleTasks[1], sampleTasks[2] });
 	ASSERT_FALSE(taskTracker.IsJsonLoaded());
-	ASSERT_EQ(taskTracker.GetTasks().size(), sampleTasks.size());
+	std::unordered_map<uint32_t, TASK> tasksBeforeUpdate = taskTracker.GetTasks();
+	ASSERT_EQ(tasksBeforeUpdate.size(), sampleTasks.size());
 
-	std::vector<std::string> tasksDescToUpdate = { "UpdatedTask1", "UpdatedTask2", "UpdatedTask3" };
-	std::vector<std::chrono::system_clock::time_point> tasksUpdateTime;
+	std::vector<std::string> taskDescsToUpdate = { "UpdatedTask1", "UpdatedTask2", "UpdatedTask3" };
 	for (uint32_t id = 0; id < sampleTasks.size(); id++)
 	{
-		ASSERT_TRUE(taskTracker.UpdateTask(id, tasksDescToUpdate[id]));
-		tasksUpdateTime.push_back(std::chrono::system_clock::now());
+		sampleTasks[id].desc = taskDescsToUpdate[id];
+		ASSERT_TRUE(taskTracker.UpdateTask(id, taskDescsToUpdate[id]));
+		sampleTasks[id].updatedAt = std::chrono::system_clock::now();
 	}
 
 	std::unordered_map<uint32_t, TASK> tasksAfterUpdate = taskTracker.GetTasks();
-	ASSERT_EQ(tasksAfterUpdate.size(), sampleTasks.size());
-	for (uint32_t id = 0; id < tasksAfterUpdate.size(); id++)
-	{
-		ASSERT_NE(tasksAfterUpdate.find(id), tasksAfterUpdate.end());
-		EXPECT_EQ(tasksAfterUpdate[id].desc, tasksDescToUpdate[id]);
-		EXPECT_EQ(tasksAfterUpdate[id].status, sampleTasks[id].status);
-		EXPECT_EQ(tasksAfterUpdate[id].createdAt, sampleTasks[id].createdAt);
-		auto tpDiff = std::chrono::duration_cast<std::chrono::milliseconds>(tasksUpdateTime[id] - tasksAfterUpdate[id].updatedAt);
-		long long timeDiff = std::abs(tpDiff.count());
-		EXPECT_LT(timeDiff, 100);
-	}
+	SCOPED_TRACE("UpdateTask_UsingValidIds");
+	IsTaskListEqual(tasksAfterUpdate, sampleTasks);
 }
 
-TEST(UpdateTask, UsingInvalidId)
+TEST_F(TestWithSampleTasks, UpdateTask_UsingInvalidId)
 {
-	std::vector<TASK> sampleTasks = {
-		{ "NewTask1", TASK_STATUS::TODO, std::chrono::system_clock::now(), std::chrono::system_clock::now() },
-		{ "NewTask2", TASK_STATUS::TODO, std::chrono::system_clock::now(), std::chrono::system_clock::now() },
-		{ "NewTask3", TASK_STATUS::TODO, std::chrono::system_clock::now(), std::chrono::system_clock::now() },
-	};
-	TaskTracker taskTracker(sampleTasks);
+	TaskTracker taskTracker({ sampleTasks[0], sampleTasks[1], sampleTasks[2] });
 	ASSERT_EQ(taskTracker.GetTasks().size(), 3);
 	EXPECT_FALSE(taskTracker.UpdateTask(UINT32_MAX, "InvalidTaskId"));
 	
-	std::unordered_map<uint32_t, TASK> tasks = taskTracker.GetTasks();
-	ASSERT_EQ(tasks.size(), 3);
-
-	for (uint32_t id = 0; id < tasks.size(); id++)
-	{
-		ASSERT_NE(tasks.find(id), tasks.end());
-		EXPECT_EQ(tasks[id].desc, sampleTasks[id].desc);
-		EXPECT_EQ(tasks[id].status, sampleTasks[id].status);
-		EXPECT_EQ(tasks[id].createdAt, sampleTasks[id].createdAt);
-		EXPECT_EQ(tasks[id].updatedAt, sampleTasks[id].updatedAt);
-	}
+	std::unordered_map<uint32_t, TASK> tasksAfterFailUpdate = taskTracker.GetTasks();
+	SCOPED_TRACE("UpdateTask_UsingInvalidId");
+	IsTaskListEqual(tasksAfterFailUpdate, sampleTasks);
 }
 
-TEST(DeleteTask, DeleteOneByOne)
+TEST_F(TestWithSampleTasks, DeleteTask_OneByOne)
 {
-	std::vector<TASK> sampleTasks = {
-		{ "NewTask1", TASK_STATUS::TODO, std::chrono::system_clock::now(), std::chrono::system_clock::now() },
-		{ "NewTask2", TASK_STATUS::TODO, std::chrono::system_clock::now(), std::chrono::system_clock::now() },
-		{ "NewTask3", TASK_STATUS::TODO, std::chrono::system_clock::now(), std::chrono::system_clock::now() },
-	};
-	TaskTracker taskTracker(sampleTasks);
+	TaskTracker taskTracker({ sampleTasks[0], sampleTasks[1], sampleTasks[2] });
 	ASSERT_FALSE(taskTracker.IsJsonLoaded());
-	std::unordered_map<uint32_t, TASK> tasksBeforeDelete = taskTracker.GetTasks();
-	ASSERT_EQ(tasksBeforeDelete.size(), sampleTasks.size());
+	uint32_t tasksBeforeDelete = taskTracker.GetTasks().size();
+	ASSERT_EQ(tasksBeforeDelete, sampleTasks.size());
 
-	ASSERT_TRUE(taskTracker.DeleteTask(0));
-
-	std::unordered_map<uint32_t, TASK> tasksAfterDelete = taskTracker.GetTasks();
-	ASSERT_EQ(tasksAfterDelete.size(), 2);
-	for (uint32_t id = 1; id < tasksBeforeDelete.size(); id++)
+	for (uint32_t id = 0; id < tasksBeforeDelete; id++)
 	{
-		ASSERT_NE(tasksAfterDelete.find(id), tasksAfterDelete.end());
-		EXPECT_EQ(tasksAfterDelete[id].desc, tasksBeforeDelete[id].desc);
-		EXPECT_EQ(tasksAfterDelete[id].status, tasksBeforeDelete[id].status);
-		EXPECT_EQ(tasksAfterDelete[id].createdAt, tasksBeforeDelete[id].createdAt);
-		EXPECT_EQ(tasksAfterDelete[id].updatedAt, tasksBeforeDelete[id].updatedAt);
+		ASSERT_TRUE(taskTracker.DeleteTask(id));
+		ASSERT_EQ(sampleTasks.erase(id), 1);
+
+		std::unordered_map<uint32_t, TASK> tasksAfterDelete = taskTracker.GetTasks();
+		SCOPED_TRACE("DeleteTask_OneByOne");
+		IsTaskListEqual(tasksAfterDelete, sampleTasks);
 	}
-
-	ASSERT_TRUE(taskTracker.DeleteTask(1));
-
-	tasksAfterDelete = taskTracker.GetTasks();
-	ASSERT_EQ(tasksAfterDelete.size(), 1);
-	for (uint32_t id = 2; id < tasksBeforeDelete.size(); id++)
-	{
-		ASSERT_NE(tasksAfterDelete.find(id), tasksAfterDelete.end());
-		EXPECT_EQ(tasksAfterDelete[id].desc, tasksBeforeDelete[id].desc);
-		EXPECT_EQ(tasksAfterDelete[id].status, tasksBeforeDelete[id].status);
-		EXPECT_EQ(tasksAfterDelete[id].createdAt, tasksBeforeDelete[id].createdAt);
-		EXPECT_EQ(tasksAfterDelete[id].updatedAt, tasksBeforeDelete[id].updatedAt);
-	}
-
-	ASSERT_TRUE(taskTracker.DeleteTask(2));
-
-	tasksAfterDelete = taskTracker.GetTasks();
-	EXPECT_TRUE(tasksAfterDelete.empty());
 }
 
-TEST(MarkTest, MarkAllTodo)
+TEST_F(TestWithSampleTasks, MarkTask_AllTodo)
 {
-	std::vector<TASK> sampleTasks = {
-		{ "NewTask1", TASK_STATUS::IN_PROGRESS, std::chrono::system_clock::now(), std::chrono::system_clock::now() },
-		{ "NewTask2", TASK_STATUS::DONE, std::chrono::system_clock::now(), std::chrono::system_clock::now() },
-		{ "NewTask3", TASK_STATUS::IN_PROGRESS, std::chrono::system_clock::now(), std::chrono::system_clock::now() },
-	};
-	TaskTracker taskTracker(sampleTasks);
+	SCOPED_TRACE("MarkTask_AllTodo");
+	TestMarkTasks(TASK_STATUS::TODO);
+}
+
+TEST_F(TestWithSampleTasks, MarkTask_AllInProgress)
+{
+	SCOPED_TRACE("MarkTask_AllInProgress");
+	TestMarkTasks(TASK_STATUS::IN_PROGRESS);
+}
+
+TEST_F(TestWithSampleTasks, MarkTask_AllDone)
+{
+	SCOPED_TRACE("MarkTask_AllDone");
+	TestMarkTasks(TASK_STATUS::DONE);
+}
+
+TEST_F(TestWithSampleTasks, GetTasksByStatus_Todo)
+{
+	SCOPED_TRACE("GetTasksByStatus_Todo");
+	TestGetTasksByStatus(TASK_STATUS::TODO);
+}
+
+TEST_F(TestWithSampleTasks, GetTasksByStatus_InProgress)
+{
+	SCOPED_TRACE("GetTasksByStatus_InProgress");
+	TestGetTasksByStatus(TASK_STATUS::IN_PROGRESS);
+}
+
+TEST_F(TestWithSampleTasks, GetTasksByStatus_Done)
+{
+	SCOPED_TRACE("GetTasksByStatus_Done");
+	TestGetTasksByStatus(TASK_STATUS::DONE);
+}
+
+TEST_F(TestWithJsonFile, Construct_FromNonExistJson)
+{
+	TaskTracker taskTracker(jsonFile);
 	ASSERT_FALSE(taskTracker.IsJsonLoaded());
-	std::unordered_map<uint32_t, TASK> tasksBeforeMark = taskTracker.GetTasks();
-	ASSERT_EQ(tasksBeforeMark.size(), sampleTasks.size());
-
-	std::vector<std::chrono::system_clock::time_point> taskMarkTimes;
-	for (uint32_t id = 0; id < tasksBeforeMark.size(); id++)
-	{
-		ASSERT_TRUE(taskTracker.MarkTask(id, TASK_STATUS::TODO));
-		taskMarkTimes.push_back(std::chrono::system_clock::now());
-	}
-
-	std::unordered_map<uint32_t, TASK> tasksAfterMark = taskTracker.GetTasks();
-	ASSERT_EQ(tasksAfterMark.size(), tasksBeforeMark.size());
-	for (uint32_t id = 0; id < tasksAfterMark.size(); id++)
-	{
-		ASSERT_NE(tasksAfterMark.find(id), tasksAfterMark.end());
-		EXPECT_EQ(tasksAfterMark[id].desc, tasksBeforeMark[id].desc);
-		EXPECT_EQ(tasksAfterMark[id].status, TASK_STATUS::TODO);
-		EXPECT_EQ(tasksAfterMark[id].createdAt, tasksBeforeMark[id].createdAt);
-		auto tpDiff = std::chrono::duration_cast<std::chrono::milliseconds>(taskMarkTimes[id] - tasksAfterMark[id].updatedAt);
-		long long timeDiff = std::abs(tpDiff.count());
-		EXPECT_LT(timeDiff, 100);
-	}
+	EXPECT_TRUE(taskTracker.GetTasks().empty());
 }
 
-TEST(MarkTask, MarkAllInProgress)
+TEST_F(TestWithJsonFile, Construct_FromEmptyJson)
 {
-	std::vector<TASK> sampleTasks = {
-		{ "NewTask1", TASK_STATUS::DONE, std::chrono::system_clock::now(), std::chrono::system_clock::now() },
-		{ "NewTask2", TASK_STATUS::DONE, std::chrono::system_clock::now(), std::chrono::system_clock::now() },
-		{ "NewTask3", TASK_STATUS::TODO, std::chrono::system_clock::now(), std::chrono::system_clock::now() },
-	};
-	TaskTracker taskTracker(sampleTasks);
-	ASSERT_FALSE(taskTracker.IsJsonLoaded());
-	std::unordered_map<uint32_t, TASK> tasksBeforeMark = taskTracker.GetTasks();
-	ASSERT_EQ(tasksBeforeMark.size(), sampleTasks.size());
-
-	std::vector<std::chrono::system_clock::time_point> taskMarkTimes;
-	for (uint32_t id = 0; id < tasksBeforeMark.size(); id++)
-	{
-		ASSERT_TRUE(taskTracker.MarkTask(id, TASK_STATUS::IN_PROGRESS));
-		taskMarkTimes.push_back(std::chrono::system_clock::now());
-	}
-
-	std::unordered_map<uint32_t, TASK> tasksAfterMark = taskTracker.GetTasks();
-	ASSERT_EQ(tasksAfterMark.size(), tasksBeforeMark.size());
-	for (uint32_t id = 0; id < tasksAfterMark.size(); id++)
-	{
-		ASSERT_NE(tasksAfterMark.find(id), tasksAfterMark.end());
-		EXPECT_EQ(tasksAfterMark[id].desc, tasksBeforeMark[id].desc);
-		EXPECT_EQ(tasksAfterMark[id].status, TASK_STATUS::IN_PROGRESS);
-		EXPECT_EQ(tasksAfterMark[id].createdAt, tasksBeforeMark[id].createdAt);
-		auto tpDiff = std::chrono::duration_cast<std::chrono::milliseconds>(taskMarkTimes[id] - tasksAfterMark[id].updatedAt);
-		long long timeDiff = std::abs(tpDiff.count());
-		EXPECT_LT(timeDiff, 100);
-	}
-}
-
-TEST(MarkTask, MarkAllDone)
-{
-	std::vector<TASK> sampleTasks = {
-		{ "NewTask1", TASK_STATUS::TODO, std::chrono::system_clock::now(), std::chrono::system_clock::now() },
-		{ "NewTask2", TASK_STATUS::TODO, std::chrono::system_clock::now(), std::chrono::system_clock::now() },
-		{ "NewTask3", TASK_STATUS::IN_PROGRESS, std::chrono::system_clock::now(), std::chrono::system_clock::now() },
-	};
-	TaskTracker taskTracker(sampleTasks);
-	ASSERT_FALSE(taskTracker.IsJsonLoaded());
-	std::unordered_map<uint32_t, TASK> tasksBeforeMark = taskTracker.GetTasks();
-	ASSERT_EQ(tasksBeforeMark.size(), sampleTasks.size());
-
-	std::vector<std::chrono::system_clock::time_point> taskMarkTimes;
-	for (uint32_t id = 0; id < tasksBeforeMark.size(); id++)
-	{
-		ASSERT_TRUE(taskTracker.MarkTask(id, TASK_STATUS::DONE));
-		taskMarkTimes.push_back(std::chrono::system_clock::now());
-	}
-
-	std::unordered_map<uint32_t, TASK> tasksAfterMark = taskTracker.GetTasks();
-	ASSERT_EQ(tasksAfterMark.size(), tasksBeforeMark.size());
-	for (uint32_t id = 0; id < tasksAfterMark.size(); id++)
-	{
-		ASSERT_NE(tasksAfterMark.find(id), tasksAfterMark.end());
-		EXPECT_EQ(tasksAfterMark[id].desc, tasksBeforeMark[id].desc);
-		EXPECT_EQ(tasksAfterMark[id].status, TASK_STATUS::DONE);
-		EXPECT_EQ(tasksAfterMark[id].createdAt, tasksBeforeMark[id].createdAt);
-		auto tpDiff = std::chrono::duration_cast<std::chrono::milliseconds>(taskMarkTimes[id] - tasksAfterMark[id].updatedAt);
-		long long timeDiff = std::abs(tpDiff.count());
-		EXPECT_LT(timeDiff, 100);
-	}
-}
-
-TEST(TestTaskTracker, GetTasksByStatus)
-{
-	std::vector<TASK> sampleTasks = {
-		{ "NewTask1", TASK_STATUS::TODO, std::chrono::system_clock::now(), std::chrono::system_clock::now() },
-		{ "NewTask2", TASK_STATUS::TODO, std::chrono::system_clock::now(), std::chrono::system_clock::now() },
-		{ "NewTask3", TASK_STATUS::TODO, std::chrono::system_clock::now(), std::chrono::system_clock::now() },
-	};
-	TaskTracker taskTracker(sampleTasks);
-	ASSERT_FALSE(taskTracker.IsJsonLoaded());
-	ASSERT_EQ(taskTracker.GetTasks().size(), sampleTasks.size());
-
-	ASSERT_TRUE(taskTracker.MarkTask(0, TASK_STATUS::DONE));
-	ASSERT_TRUE(taskTracker.MarkTask(1, TASK_STATUS::IN_PROGRESS));
-
-	TASK_STATUS targetStatus = TASK_STATUS::DONE;
-	std::unordered_map<uint32_t, TASK> tasksByTargetStatus = taskTracker.GetTasks(&targetStatus);
-	ASSERT_TRUE(tasksByTargetStatus.size(), 1);
-	EXPECT_EQ(tasksByTargetStatus[0].status, TASK_STATUS::DONE);
-
-	targetStatus = TASK_STATUS::IN_PROGRESS;
-	tasksByTargetStatus = taskTracker.GetTasks(&targetStatus);
-	ASSERT_TRUE(tasksByTargetStatus.size(), 1);
-	EXPECT_EQ(tasksByTargetStatus[1].status, TASK_STATUS::IN_PROGRESS);
-}
-
-TEST(TestTaskTracker, ReadNonExistFile)
-{
-	std::string jsonFile = "nonexist.json";
-	std::remove(jsonFile.c_str());
-
-	TaskTracker* taskTracker = new TaskTracker(jsonFile);
-	ASSERT_FALSE(taskTracker->IsJsonLoaded());
-	EXPECT_TRUE(taskTracker->GetTasks().empty());
-	delete taskTracker;
-	taskTracker = nullptr;
-
-	std::remove(jsonFile.c_str());
-}
-
-TEST(TestTaskTracker, ReadEmptyFile)
-{
-	std::string jsonFile = "testempty.json";
-	std::ofstream outFile(jsonFile);
-	outFile.close();
-	ASSERT_FALSE(outFile.fail());
-
+	CreateEmptyFile();
 	TaskTracker taskTracker(jsonFile);
 	EXPECT_TRUE(taskTracker.IsJsonLoaded());
 	EXPECT_TRUE(taskTracker.GetTasks().empty());
 }
 
-TEST(TestTaskTracker, SaveAndReadFile)
+TEST_F(TestWithJsonFile, Reconstruct_WriteThenReadFromJson)
 {
-	std::string jsonFile = "testsample.json";
-	std::ofstream outFile(jsonFile);
-	outFile.close();
-	ASSERT_FALSE(outFile.fail());
-
-	TaskTracker* taskTracker = new TaskTracker(jsonFile);
-	ASSERT_TRUE(taskTracker->IsJsonLoaded());
-	ASSERT_TRUE(taskTracker->GetTasks().empty());
-
-	std::vector<std::string> samplesTaskDesc = { "ReadTask1", "ReadTask2", "ReadTask3" };
-	for (const std::string& taskDesc : samplesTaskDesc)
-	{
-		taskTracker->AddTask(taskDesc);
-	}
-
-	std::unordered_map<uint32_t, TASK> sampleTasks = taskTracker->GetTasks();
-	ASSERT_EQ(sampleTasks.size(), samplesTaskDesc.size());
-	delete taskTracker;
-	taskTracker = nullptr;
+	std::unordered_map<uint32_t, TASK> sampleTasks;
+	CreateSampleFile(sampleTasks);
 
 	TaskTracker taskTrackerRead(jsonFile);
 	std::unordered_map<uint32_t, TASK> readTasks = taskTrackerRead.GetTasks();
-
-	for (auto itr = readTasks.begin(); itr != readTasks.end(); itr++)
-	{
-		ASSERT_NE(sampleTasks.find(itr->first), sampleTasks.end());
-		EXPECT_EQ(itr->second.desc, sampleTasks[itr->first].desc);
-		EXPECT_EQ(itr->second.status, sampleTasks[itr->first].status);
-		EXPECT_EQ(itr->second.createdAt, StringToTimePoint(TimePointToString(sampleTasks[itr->first].createdAt)));
-		EXPECT_EQ(itr->second.updatedAt, StringToTimePoint(TimePointToString(sampleTasks[itr->first].updatedAt)));
-	}
+	IsTaskListEqual(readTasks, sampleTasks);
 }
