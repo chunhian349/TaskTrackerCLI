@@ -78,7 +78,7 @@ TaskTracker::TaskTracker(std::string readJsonPath)
 
 TaskTracker::~TaskTracker()
 {
-	if (!jsonLoaded) { return; }
+	if (jsonPath.empty()) { return; }
 
 	std::string tmpFilePath = jsonPath + ".tmp";
 	std::string jsonString = Stringify();
