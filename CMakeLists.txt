@@ -30,17 +30,21 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
-set(UNITTEST_PROJECT_NAME TestTaskTracker)
-
-set(UNITTEST_SOURCES
+set(UNIT_TEST TestTaskTracker)
+set(UNIT_TEST_SOURCES
 	tests/TestTaskTracker.cpp
 	src/Utils.cpp
 	src/TaskTracker.cpp
 )
+add_executable(${UNIT_TEST} ${UNIT_TEST_SOURCES})
+target_link_libraries(${UNIT_TEST} GTest::gtest_main)
 
-add_executable(${UNITTEST_PROJECT_NAME} ${UNITTEST_SOURCES})
-
-target_link_libraries(${UNITTEST_PROJECT_NAME} GTest::gtest_main)
+set(CLI_TEST TestTaskTrackerCLI)
+set(CLI_TEST_SOURCES tests/TestTaskTrackerCLI.cpp)
+add_executable(${CLI_TEST} ${CLI_TEST_SOURCES})
+target_compile_definitions(${CLI_TEST} PRIVATE TASKTRACKERCLI_EXE_PATH="$<TARGET_FILE:${PROJECT_NAME}>")
+target_link_libraries(${CLI_TEST} GTest::gtest_main)
 
 include(GoogleTest)
-gtest_discover_tests(${UNITTEST_PROJECT_NAME})
+gtest_discover_tests(${UNIT_TEST})
+gtest_discover_tests(${CLI_TEST})
