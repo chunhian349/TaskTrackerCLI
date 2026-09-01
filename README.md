@@ -38,9 +38,29 @@ cmake --build . --config Release
 After a successful build, you can find the final executable files here:
 * **Application**: `build/Release/TaskTrackerCLI.exe`
 * **Unit Tests**: `build/Release/TestTaskTracker.exe`
+* **CLI Tests**: `build/Release/TestTaskTrackerCLI.exe`
 
-## Running the Unit Tests
+## Running Tests
 * Navigate into your `build` directory and run:
 ```bash
 ctest -C Release
+```
+
+## Example Commands and Usage
+* Navigate into `build/Release` directory:
+```bash
+# Adding a new task
+./TaskTrackerCLI.exe add "Buy groceries"
+# Updating and deleting tasks
+./TaskTrackerCLI.exe update 1 "Buy groceries and cook dinner"
+./TaskTrackerCLI.exe delete 1
+# Marking a task as in progress or done
+./TaskTrackerCLI.exe mark-in-progress 1
+./TaskTrackerCLI.exe mark-done 1
+# Listing all tasks
+./TaskTrackerCLI.exe list
+# Listing tasks by status
+./TaskTrackerCLI.exe list done
+./TaskTrackerCLI.exe list todo
+./TaskTrackerCLI.exe list in-progress
 ```
